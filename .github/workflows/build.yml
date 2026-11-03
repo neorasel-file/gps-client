@@ -1,0 +1,48 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Build Application Cleanly
+        run: |
+          flutter create --project-name neofind --org com.example full_project
+          cp -f lib/main.dart full_project/lib/main.dart
+          cp -f pubspec.yaml full_project/pubspec.yaml
+          cd full_project
+          
+          # SDK 21 Fix
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle || true
+          sed -i 's/minSdk = flutter.minSdk/minSdk = 21/g' android/app/build.gradle || true
+
+          # AndroidManifest.xml-এ সার্ভিস ও পারমিশন ইনজেক্ট
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>' android/app/src/main/AndroidManifest.xml
+
+          sed -i '/<\/activity>/a \        <service\n            android:name="id.flutter.flutter_background_service.BackgroundService"\n            android:foregroundServiceType="location"\n            android:exported="true"\n            android:stopWithTask="false" />' android/app/src/main/AndroidManifest.xml
+
+          flutter pub get
+          flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: neofind-release-apk
+          path: full_project/build/app/outputs/flutter-apk/app-release.apk
