@@ -1,0 +1,49 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.6'
+          channel: 'stable'
+
+      - name: Scaffold Complete App & Overwrite Files
+        run: |
+          # ১. ফ্রেশ স্ট্যান্ডার্ড ফ্ল্যাটার প্রজেক্ট তৈরি
+          flutter create --org com.example full_project
+          
+          # ২. আমাদের lib/main.dart ও pubspec.yaml প্রজেক্টে কপি করা
+          cp -f lib/main.dart full_project/lib/main.dart
+          cp -f pubspec.yaml full_project/pubspec.yaml
+          
+          # ৩. প্রজেক্ট ফোল্ডারে প্রবেশ
+          cd full_project
+          
+          # ৪. অ্যান্ড্রয়েড পারমিশন ইনজেক্ট করা
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>' android/app/src/main/AndroidManifest.xml
+          
+          # ৫. ডিপেন্ডেন্সি ও বিল্ড সম্পন্ন করা
+          flutter pub get
+          flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: target-tracker-apk
+          path: full_project/build/app/outputs/flutter-apk/app-release.apk
